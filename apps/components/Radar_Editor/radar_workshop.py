@@ -1573,7 +1573,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         self.menu_toggle_btn.setMinimumHeight(28)
         self.menu_toggle_btn.setMaximumHeight(28)
         self.menu_toggle_btn.clicked.connect(self._on_menu_btn_clicked)
-        self.menu_toggle_btn.setVisible(self.standalone_mode)
+        self.menu_toggle_btn.setVisible(True)  # show in both standalone and docked
         layout.addWidget(self.menu_toggle_btn)
 
         # - Settings button (standalone only — docked uses right-panel button)
@@ -1584,7 +1584,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         self.settings_btn.setIconSize(QSize(20, 20))
         self.settings_btn.clicked.connect(self._show_workshop_settings)
         self.settings_btn.setToolTip(App_name + "Workshop Settings")
-        self.settings_btn.setVisible(self.standalone_mode)
+        self.settings_btn.setVisible(True)  # show in both standalone and docked
         layout.addWidget(self.settings_btn)
 
         layout.addSpacing(8)
@@ -1649,23 +1649,29 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         layout.addWidget(self.properties_btn)
 
         # - Dock button — hidden in standalone (nothing to dock to)
-        self.dock_btn = QPushButton("D")
-        self.dock_btn.setMinimumWidth(40)
-        self.dock_btn.setMaximumWidth(40)
-        self.dock_btn.setMinimumHeight(30)
+        self.dock_btn = QPushButton()
+        try:
+            self.dock_btn.setIcon(SVGIconFactory.import_icon(20, icon_color))
+            self.dock_btn.setIconSize(QSize(20, 20))
+        except Exception:
+            self.dock_btn.setText("⊞")
+        self.dock_btn.setFixedSize(35, 35)
         self.dock_btn.setToolTip("Dock into IMG Factory")
         self.dock_btn.clicked.connect(self.toggle_dock_mode)
         self.dock_btn.setVisible(not self.standalone_mode)
         layout.addWidget(self.dock_btn)
 
-        # - Tear-off button — only when docked
+        # - Tear-off button — only when docked, use icon not bare "T"
         if not self.standalone_mode:
-            self.tearoff_btn = QPushButton("T")
-            self.tearoff_btn.setMinimumWidth(40)
-            self.tearoff_btn.setMaximumWidth(40)
-            self.tearoff_btn.setMinimumHeight(30)
+            self.tearoff_btn = QPushButton()
+            try:
+                self.tearoff_btn.setIcon(SVGIconFactory.export_icon(20, icon_color))
+                self.tearoff_btn.setIconSize(QSize(20, 20))
+            except Exception:
+                self.tearoff_btn.setText("↗")
+            self.tearoff_btn.setFixedSize(35, 35)
             self.tearoff_btn.clicked.connect(self._toggle_tearoff)
-            self.tearoff_btn.setToolTip("Tear off to standalone window")
+            self.tearoff_btn.setToolTip("Tear off — open as standalone window")
             layout.addWidget(self.tearoff_btn)
 
         # - Window controls (standalone only)
@@ -1794,7 +1800,8 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         info = QLabel(
             f"Current tile size: <b>{current_size}</b>  "
             f"({len(self._tile_rgba)} tiles loaded)<br>"
-            f"Upscaled tiles saved as <b>gta3.img.new</b> alongside the original.<br>"
+            f"Output saved alongside the original (default: <b>gta3.img.new</b>).<br>"
+            f"A save dialog lets you choose the exact location.<br>"
             f"The original IMG is never modified.")
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -1855,7 +1862,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         filt = "LANCZOS" if rb_lanczos.isChecked() else "NEAREST"
         self._do_upscale(target, filt)
 
-    def _do_upscale(self, target_size: int, filter_name: str): #vers 1
+    def _do_upscale(self, target_size: int, filter_name: str): #vers 2
         """Perform upscale: resize all tiles, rebuild IMG, save as .new."""
         from PIL import Image
 
@@ -1864,7 +1871,13 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         if not self._img_path or not self._img_reader:
             QMessageBox.warning(self, "No IMG", "Load an IMG file first."); return
 
-        out_path = str(self._img_path) + ".new"
+        # Default output path alongside original, let user confirm/change
+        p = Path(self._img_path)
+        default_out = str(p.parent / (p.stem + f"_upscaled{p.suffix}"))
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Upscaled IMG as…", default_out,
+            "IMG Archives (*.img);;All Files (*)")
+        if not out_path: return
 
         # Progress
         total = len(self._tile_entries)
@@ -1966,7 +1979,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
             sd = Path(self._img_path).with_suffix(".dir")
             if sd.exists():
                 import shutil
-                shutil.copy2(sd, out_path.replace(".img.new", ".dir.new") if ".img" in out_path else out_path + ".dir")
+                shutil.copy2(sd, str(Path(out_path).with_suffix(".dir")))
 
             prog.setValue(total + 1)
 
