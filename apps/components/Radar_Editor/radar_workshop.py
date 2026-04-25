@@ -8,6 +8,10 @@
 # TODO; Methodlist is missing
 # TODO; When updating the themes, and hitting apply the effect changes all theme settings including the SVF icons.
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).parent / "depends"))
+
 import os, json, sys, requests, threading, struct, re, math, shutil
 from datetime import datetime
 from pathlib import Path
