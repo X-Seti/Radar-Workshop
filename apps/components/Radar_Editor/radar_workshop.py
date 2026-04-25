@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-#this belongs in apps/components/Radar_Editor/radar_workshop.py - Version: 20
+#this belongs in apps/components/Radar_Editor/radar_workshop.py - Version: 21
 # X-Seti - Apr 2026 - IMG Factory 1.6 - Radar Workshop
 # Based on gui_template.py (GUIWorkshop base)
 # Layout: left panel hidden | centre=tile list | right=radar grid preview
 # Tool bar uses template pattern: titlebar + toolbar with all standard buttons
+
+# TODO; Methodlist is missing
+# TODO; When updating the themes, and hitting apply the effect changes all theme settings including the SVF icons.
 
 import os, json, sys, requests, threading, struct, re, math, shutil
 from datetime import datetime
@@ -31,9 +34,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt, QPoint, QSize, QThread, QTimer
 from PyQt6.QtGui import  QAction, QBrush, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPainterPath, QPen, QPixmap, QShortcut
 
+from apps.methods.imgfactory_svg_icons import SVGIconFactory
+
 
 # - Detect standalone vs docked
-def _is_standalone():
+def _is_standalone(): #vers 1
     import inspect
     frame = inspect.currentframe()
     try:
@@ -48,7 +53,7 @@ def _is_standalone():
 STANDALONE_MODE = _is_standalone()
 DEBUG_STANDALONE = False
 App_name  = "Radar Workshop"
-App_build = "Apr 2026"
+App_build = "21"
 App_auth  = "X-Seti"
 Build     = "Build 357"
 
