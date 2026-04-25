@@ -53,7 +53,7 @@ App_auth  = "X-Seti"
 Build     = "Build 357"
 
 
-# ── Infrastructure imports
+#    Infrastructure imports
 try:
     from apps.methods.imgfactory_svg_icons import SVGIconFactory
     ICONS_AVAILABLE = True
@@ -228,7 +228,7 @@ class RadarTxdReader:
                 th = pos + 24   # skip 0x15 header(12) + inner 0x01 header(12)
                 platform = struct.unpack_from('<I', data, th)[0]
 
-                # ── Xbox (platform 5) ─────────────────────────────────────────
+                #    Xbox (platform 5)                                          
                 if platform == 5:
                     nb_ = data[th+8:th+40]
                     nb_ = nb_[:nb_.index(b'\x00')] if b'\x00' in nb_ else nb_
@@ -249,7 +249,7 @@ class RadarTxdReader:
                             struct.unpack_from('<I', data, th+72)[0])
                     return rgba, ww, hh, name
 
-                # ── PS2 (platform 6 or FourCC "PS2\0") ──────────────────────
+                #    PS2 (platform 6 or FourCC "PS2\0")                       
                 # Header layout (body starts at th):
                 # +0   platformId  +4  filterMode  +8  uv_addr  +12 padding
                 # +16  name[32]    +48 maskName[32]
@@ -283,8 +283,8 @@ class RadarTxdReader:
                         rgba = RadarTxdReader._raw_to_rgba(pd, ww, hh, raster_fmt)
                     return rgba, ww, hh, name
 
-                # ── PC D3D8 (platform 8, older) / D3D9 (platform 9, SA PC) ───
-                # ── iOS/Android (platform 8, ver 0x1005FFFF) ─────────────────
+                #    PC D3D8 (platform 8, older) / D3D9 (platform 9, SA PC)    
+                #    iOS/Android (platform 8, ver 0x1005FFFF)                  
                 else:
                     nb_ = data[th+8:th+40]
                     nb_ = nb_[:nb_.index(b'\x00')] if b'\x00' in nb_ else nb_
@@ -792,7 +792,7 @@ class TileListItem(QListWidgetItem):
 
 
 
-# ── Per-tool settings ─────────────────────────────────────────────────────────
+#    Per-tool settings                                                          
 class RADSettings:
     """Lightweight JSON settings for Radar Workshop.
     Stored at ~/.config/imgfactory/radar_workshop.json
@@ -858,7 +858,7 @@ class RADSettings:
         return [p for p in self._data.get('recent_files', []) if os.path.isfile(p)]
 
 
-# ── Radar Palette Widget ───────────────────────────────────────────────────────
+#    Radar Palette Widget                                                        
 class RadarPaletteWidget(QWidget):
     """Simple colour palette strip — shows colours extracted from the current tile.
     Click a cell to pick that colour. Right-click to set background colour."""
@@ -1352,6 +1352,27 @@ class _CornerOverlay(QWidget):
         painter.end()
 
 
+#    World bounds per game (GTA world units covered by the full radar map)      
+# Format: (world_min_x, world_max_x, world_min_y, world_max_y)
+# Tile grid origin is top-left = (world_min_x, world_max_y) — Y flips screen↔world
+_GAME_WORLD_BOUNDS = {
+    "III PC":   (-2000.0, 2000.0, -2000.0, 2000.0),
+    "VC PC":    (-2000.0, 2000.0, -2000.0, 2000.0),
+    "SA PC":    (-3000.0, 3000.0, -3000.0, 3000.0),
+    "LCS PC":   (-2000.0, 2000.0, -2000.0, 2000.0),
+    "VCS PC":   (-2000.0, 2000.0, -2000.0, 2000.0),
+    "SOL":      (-6000.0, 6000.0, -6000.0, 6000.0),
+    "III And":  (-2000.0, 2000.0, -2000.0, 2000.0),
+    "VC And":   (-2000.0, 2000.0, -2000.0, 2000.0),
+    "SA And":   (-3000.0, 3000.0, -3000.0, 3000.0),
+    "LCS iOS":  (-2000.0, 2000.0, -2000.0, 2000.0),
+    "SA iOS":   (-3000.0, 3000.0, -3000.0, 3000.0),
+    "LCS PSP":  (-2000.0, 2000.0, -2000.0, 2000.0),
+    "VCS PSP":  (-2000.0, 2000.0, -2000.0, 2000.0),
+    "Custom":   (-3000.0, 3000.0, -3000.0, 3000.0),
+}
+
+
 class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
     """Radar Workshop – skeleton class"""
 
@@ -1478,6 +1499,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         self._undo_stack: list = []          # list of (idx, rgba) snapshots
         self._redo_stack: list = []
         self._tile_rgba:    Dict[int, bytes] = {}
+        self._world_offset: tuple = (0.0, 0.0)  # (dx, dy) world repositioning
         self._tile_entries: List[dict] = []
         self._dirty_tiles:  set = set()
         self._list_items:   List[TileListItem] = []
@@ -1506,7 +1528,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
     def get_tab_margins(self): #vers 1
         return (self.tabmerginsa,self.tabmerginsb,self.tabmerginsc,self.tabmerginsd)
 
-    # ── setup_ui
+    #    setup_ui
 
     def setup_ui(self): #vers 1
         main_layout = QVBoxLayout(self)
@@ -1694,6 +1716,71 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 
 
     # - Left panel: session list
+    def get_world_bounds(self): #vers 2
+        """Return (min_x, max_x, min_y, max_y) world-unit coverage for the
+        current game preset, adjusted by any world offset set via set_world_offset().
+        Used by IPLMapView for radar image overlay."""
+        base = (-3000.0, 3000.0, -3000.0, 3000.0)
+        for key, preset in GAME_PRESETS.items():
+            if preset is self._game_preset:
+                base = _GAME_WORLD_BOUNDS.get(key, base)
+                break
+        ox, oy = getattr(self, '_world_offset', (0.0, 0.0))
+        return (base[0]+ox, base[1]+ox, base[2]+oy, base[3]+oy)
+
+    def set_world_offset(self, dx: float, dy: float): #vers 1
+        """Shift the world-space origin of the radar map by (dx, dy).
+        This repositions where the radar tiles are placed in world coordinates.
+        Used for SOL or custom map offsets. Does NOT modify tile pixel data."""
+        self._world_offset = (float(dx), float(dy))
+        if self.main_window and hasattr(self.main_window, 'log_message'):
+            self.main_window.log_message(
+                f"Radar world offset set: dX={dx:+.1f}  dY={dy:+.1f}")
+
+    def get_composite_image(self, max_size: int = 2048): #vers 1
+        """Stitch all loaded tile RGBA buffers into a single QImage.
+        Tiles are arranged in row-major order (row 0 = north/top of map).
+        Returns QImage or None if no tiles are loaded.
+        max_size: output image is capped at max_size × max_size pixels."""
+        from PyQt6.QtGui import QImage
+        if not self._tile_rgba:
+            return None
+
+        preset = self._game_preset
+        cols   = preset.get("cols", 8)
+        rows   = preset.get("rows", 8)
+        tw     = self._tw
+        th     = self._th
+
+        out_w = cols * tw
+        out_h = rows * th
+
+        # Build output buffer (RGBA)
+        out = bytearray(out_w * out_h * 4)
+
+        for idx, rgba in self._tile_rgba.items():
+            col = idx % cols
+            row = idx // cols
+            if row >= rows or col >= cols:
+                continue
+            ox = col * tw
+            oy = row * th
+            for ty in range(th):
+                src_row  = ty * tw * 4
+                dst_row  = (oy + ty) * out_w * 4 + ox * 4
+                out[dst_row:dst_row + tw * 4] = rgba[src_row:src_row + tw * 4]
+
+        img = QImage(bytes(out), out_w, out_h, out_w * 4,
+                     QImage.Format.Format_RGBA8888)
+
+        # Scale down if too large
+        if out_w > max_size or out_h > max_size:
+            from PyQt6.QtCore import Qt as _Qt
+            img = img.scaled(max_size, max_size,
+                             _Qt.AspectRatioMode.KeepAspectRatio,
+                             _Qt.TransformationMode.SmoothTransformation)
+        return img.copy()   # detach from temp buffer
+
     def _create_left_panel(self): #vers 1
         # Hidden — template returns None in standalone
         return None
@@ -1708,7 +1795,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         vl.setContentsMargins(*self.get_panel_margins())
         vl.setSpacing(self.panelspacing)
 
-        # ── Button row ────────────────────────────────────────────────────────
+        #    Button row                                                         
         icon_color = self._get_icon_color()
         btn_row = QHBoxLayout()
         btn_row.setSpacing(2)
@@ -1731,7 +1818,26 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         btn_row.addStretch()
         vl.addLayout(btn_row)
 
-        # ── Tile search bar ────────────────────────────────────────────────────
+        #    World position / offset                                            
+        from PyQt6.QtWidgets import QGroupBox, QFormLayout, QDoubleSpinBox
+        offset_box = QGroupBox("World position offset")
+        ofl        = QFormLayout(offset_box); ofl.setSpacing(3)
+        self._off_x = QDoubleSpinBox(); self._off_x.setRange(-9999,9999)
+        self._off_x.setDecimals(1); self._off_x.setFixedHeight(22); self._off_x.setValue(0)
+        self._off_y = QDoubleSpinBox(); self._off_y.setRange(-9999,9999)
+        self._off_y.setDecimals(1); self._off_y.setFixedHeight(22); self._off_y.setValue(0)
+        ofl.addRow("dX:", self._off_x)
+        ofl.addRow("dY:", self._off_y)
+        from PyQt6.QtWidgets import QPushButton as _RPB
+        apply_off = _RPB("Apply Offset"); apply_off.setFixedHeight(22)
+        apply_off.setToolTip(
+            "Shift world-space origin by dX/dY for IPL World Map overlay.")
+        apply_off.clicked.connect(
+            lambda: self.set_world_offset(self._off_x.value(), self._off_y.value()))
+        ofl.addRow("", apply_off)
+        vl.addWidget(offset_box)
+
+        #    Tile search bar                                                     
         search_row = QHBoxLayout()
         self._tile_search = QLineEdit()
         self._tile_search.setPlaceholderText("Search tiles…  e.g. 64-95 or radar")
@@ -1740,7 +1846,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         search_row.addWidget(self._tile_search)
         vl.addLayout(search_row)
 
-        # ── Tile list ─────────────────────────────────────────────────────────
+        #    Tile list                                                          
         self._tile_list = QListWidget()
         self._tile_list.setIconSize(QSize(THUMB, THUMB))
         self._tile_list.setUniformItemSizes(False)   # items have 2 text lines
@@ -1750,7 +1856,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         self._tile_list.customContextMenuRequested.connect(self._on_tile_list_context)
         self._tile_list.itemDoubleClicked.connect(lambda item: self._edit_tile_popup(item.idx))
         vl.addWidget(self._tile_list, 1)
-        # TODO add bitdepth after tile size
+        # STUB: add bitdepth column after tile size
         self._dirty_lbl = QLabel("Modified: 0")
         self._dirty_lbl.setFont(self.infobar_font)
         vl.addWidget(self._dirty_lbl)
@@ -1889,7 +1995,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         QApplication.processEvents()
 
         try:
-            # ── Upscale all tile rgba data ────────────────────────────────────
+            #    Upscale all tile rgba data                                     
             new_rgba = {}
             for idx in range(total):
                 prog.setValue(idx)
@@ -1901,7 +2007,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
                 img = img.resize((target_size, target_size), filt)
                 new_rgba[idx] = img.tobytes()
 
-            # ── Build new TXD data for each radar entry ───────────────────────
+            #    Build new TXD data for each radar entry                        
             new_txd_data = {}
             for idx, rgba in new_rgba.items():
                 if idx >= len(self._tile_entries): continue
@@ -1909,7 +2015,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
                 name = Path(e["name"]).stem
                 new_txd_data[idx] = RadarTxdReader.write(rgba, target_size, target_size, name)
 
-            # ── Rebuild IMG: read all entries, replace radar TXDs ─────────────
+            #    Rebuild IMG: read all entries, replace radar TXDs              
             prog.setLabelText("Rebuilding IMG archive…")
             prog.setValue(total)
             QApplication.processEvents()
@@ -2083,7 +2189,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(0)
 
-        # ── Centre: tab widget — Map tab + tile zoom tabs ────────────────────
+        #    Centre: tab widget — Map tab + tile zoom tabs                     
         self._view_tabs = QTabWidget()
         self._view_tabs.setDocumentMode(True)
         self._view_tabs.setTabsClosable(False)  # Map tab never closable
@@ -2115,7 +2221,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         self._view_tabs.currentChanged.connect(self._on_view_tab_changed)
         hl.addWidget(self._view_tabs, 1)
 
-        # ── Right sidebar — 2-column icon grid ───────────────────────────────
+        #    Right sidebar — 2-column icon grid                                
         sidebar = QFrame()
         sidebar.setFrameStyle(QFrame.Shape.StyledPanel)
         sidebar.setFixedWidth(80)
@@ -2153,7 +2259,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
             s = QFrame(); s.setFrameShape(QFrame.Shape.HLine)
             sl.addSpacing(2); sl.addWidget(s); sl.addSpacing(2)
 
-        # ── Map view tools ────────────────────────────────────────────────────
+        #    Map view tools                                                     
         _row(_nb('zoom_in_icon',  "Zoom in (+)",            lambda: self._zoom(1.25)),
              _nb('zoom_out_icon', "Zoom out (-)",           lambda: self._zoom(0.8)))
         _row(_nb('fit_grid_icon', "Fit grid (Ctrl+0)",      self._fit),
@@ -2170,7 +2276,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 
         _sep()
 
-        # ── Draw tools (checkable) ────────────────────────────────────────────
+        #    Draw tools (checkable)                                             
 
         def _tool_btn(icon_fn, tip, tool_name):
             b = _nb(icon_fn, tip, lambda checked=False, t=tool_name: self._set_draw_tool(t),
@@ -2196,7 +2302,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 
         _sep()
 
-        # ── Transforms ────────────────────────────────────────────────────────
+        #    Transforms                                                         
         _row(_nb('rotate_cw_icon',  "Rotate +90°",     self._rotate_cw),
              _nb('rotate_ccw_icon', "Rotate -90°",     self._rotate_ccw))
         _row(_nb('flip_horz_icon',  "Flip horizontal", self._flip_horz),
@@ -2204,7 +2310,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 
         _sep()
 
-        # ── Map render / view options ──────────────────────────────────────────
+        #    Map render / view options                                           
         ren_lbl = QLabel("View")
         ren_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ren_lbl.setStyleSheet("font-size:9px;")
@@ -2236,7 +2342,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 
         _sep()
 
-        # ── FG/BG colour swatches ─────────────────────────────────────────────
+        #    FG/BG colour swatches                                              
         sw_lbl = QLabel("FG/BG")
         sw_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sw_lbl.setStyleSheet("font-size:9px;")
@@ -2263,7 +2369,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         sl.addWidget(sep3)
         sl.addSpacing(2)
 
-        # ── Palette — colours from current tile ───────────────────────────────
+        #    Palette — colours from current tile                                
         pal_lbl = QLabel("Palette")
         pal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pal_lbl.setStyleSheet("font-size:9px;")
@@ -2357,9 +2463,9 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
                     out[i:i+4] = [r, g, b, 255]   # fully opaque
         return bytes(out)
 
-    # ─────────────────────────────────────────────────────────────────────────
+    #                                                                          
     # Drawing engine — shared by RadarGridWidget, _TileZoomView, any surface
-    # ─────────────────────────────────────────────────────────────────────────
+    #                                                                          
 
     def ws_set_pixel(self, buf: bytearray, px: int, py: int, color: QColor,
                      brush: int = 1): #vers 2
@@ -2694,7 +2800,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         self._bg_color = color
         self._update_swatch_buttons()
 
-    # ── Tile transforms ───────────────────────────────────────────────────────
+    #    Tile transforms                                                        
     def _get_current_rgba(self): #vers 1
         """Return bytearray of current tile RGBA, or None."""
         idx = self._current_idx
@@ -2798,7 +2904,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         layout = QVBoxLayout(dlg)
         tabs = QTabWidget()
 
-        # ── Fonts tab ─────────────────────────────────────────────────────────
+        #    Fonts tab                                                          
         fonts_tab = QWidget()
         fl = QVBoxLayout(fonts_tab)
 
@@ -2819,7 +2925,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         fl.addStretch()
         tabs.addTab(fonts_tab, "Fonts")
 
-        # ── Display tab ───────────────────────────────────────────────────────
+        #    Display tab                                                        
         disp_tab = QWidget()
         dl = QVBoxLayout(disp_tab)
 
@@ -2832,7 +2938,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         dl.addStretch()
         tabs.addTab(disp_tab, "Display")
 
-        # ── Menu tab ──────────────────────────────────────────────────────────
+        #    Menu tab                                                           
         menu_tab = QWidget()
         ml = QVBoxLayout(menu_tab)
 
@@ -2855,7 +2961,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 
         layout.addWidget(tabs)
 
-        # ── Buttons ───────────────────────────────────────────────────────────
+        #    Buttons                                                            
         btn_row = QHBoxLayout(); btn_row.addStretch()
 
         def apply_all():
@@ -3978,8 +4084,8 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
         def _tab(html):
             t = QTextEdit(); t.setReadOnly(True); t.setHtml(html); return t
 
-        # ── Quick Start ────────────────────────────────────────────────────────
-        # App_name App_build App_auth Build = TODO - add auther info above Quickstart
+        #    Quick Start                                                         
+        # STUB: add App_name/App_build/App_auth above Quickstart section
         quickstart = """<p style="font-size:11px; color:#888; margin-bottom:8px;">
 <b>{}</b> &nbsp;·&nbsp; {}&nbsp;·&nbsp; {}&nbsp;·&nbsp; {}
 </p>
@@ -4008,7 +4114,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 <tr><td><b>K</b></td><td>Dropper (colour picker)</td></tr>
 </table>"""
 
-        # ── Tile List ──────────────────────────────────────────────────────────
+        #    Tile List                                                           
         tilelist = """<h3>Tile List (Left Panel)</h3>
 <p>Shows all radar tiles with 64×64 thumbnail, name, game badge [SA] / [VC] etc., and tile size.</p>
 <ul>
@@ -4033,7 +4139,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 <li><b>Palette</b> — colours extracted from current tile. Left-click = FG, right-click = BG.</li>
 </ul>"""
 
-        # ── Export/Import ──────────────────────────────────────────────────────
+        #    Export/Import                                                       
         exportinfo = """<h3>Export / Import Full Map</h3>
 <p>The <b>Export</b> button saves all loaded tiles assembled into one full-size PNG or BMP.</p>
 <ul>
@@ -4045,7 +4151,7 @@ class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
 <h3>Recent Files</h3>
 <p>The <b>File &gt; Recent Files</b> menu remembers the last 10 opened IMG archives. Window size and position are also saved automatically.</p>"""
 
-        # ── Formats ───────────────────────────────────────────────────────────
+        #    Formats                                                            
         formats = """<h3>Supported Formats</h3>
 <table border=1 cellpadding=4 cellspacing=0>
 <tr><th>Game</th><th>File</th><th>Tiles</th><th>Grid</th><th>Format</th></tr>
