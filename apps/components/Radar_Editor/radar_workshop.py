@@ -925,6 +925,22 @@ class RadarPaletteWidget(QWidget):
     def _cols(self) -> int:
         return max(1, self.width() // self.CELL)
 
+
+    def _get_ui_color(self, key): #vers 1
+        """Return theme-aware QColor. No hardcoded colors."""
+        from PyQt6.QtGui import QColor
+        try:
+            app_settings = getattr(self, 'app_settings', None) or \
+                getattr(getattr(self, 'main_window', None), 'app_settings', None)
+            if app_settings and hasattr(app_settings, 'get_ui_color'):
+                return app_settings.get_ui_color(key)
+        except Exception:
+            pass
+        pal = self.palette()
+        if key == 'viewport_bg':   return pal.color(pal.ColorRole.Base)
+        if key == 'viewport_text': return pal.color(pal.ColorRole.PlaceholderText)
+        if key == 'border':        return pal.color(pal.ColorRole.Mid)
+        return pal.color(pal.ColorRole.WindowText)
     def _idx_at(self, pos: QPoint) -> int:
         col = pos.x() // self.CELL
         row = pos.y() // self.CELL
@@ -1009,6 +1025,22 @@ class RadarPaletteWidget(QWidget):
 
 
 class _BoredomPuzzle(QDialog):
+
+    def _get_ui_color(self, key): #vers 1
+        """Return theme-aware QColor. No hardcoded colors."""
+        from PyQt6.QtGui import QColor
+        try:
+            app_settings = getattr(self, 'app_settings', None) or \
+                getattr(getattr(self, 'main_window', None), 'app_settings', None)
+            if app_settings and hasattr(app_settings, 'get_ui_color'):
+                return app_settings.get_ui_color(key)
+        except Exception:
+            pass
+        pal = self.palette()
+        if key == 'viewport_bg':   return pal.color(pal.ColorRole.Base)
+        if key == 'viewport_text': return pal.color(pal.ColorRole.PlaceholderText)
+        if key == 'border':        return pal.color(pal.ColorRole.Mid)
+        return pal.color(pal.ColorRole.WindowText)
     """🧩 Sliding tile puzzle using the loaded radar map tiles."""
 
     def __init__(self, tile_rgba: dict, cols: int, rows: int,
@@ -1195,6 +1227,22 @@ class _TileZoomView(QWidget):
         py = int(sy * th / h)
         return max(0, min(tw-1, px)), max(0, min(th-1, py))
 
+
+    def _get_ui_color(self, key): #vers 1
+        """Return theme-aware QColor. No hardcoded colors."""
+        from PyQt6.QtGui import QColor
+        try:
+            app_settings = getattr(self, 'app_settings', None) or \
+                getattr(getattr(self, 'main_window', None), 'app_settings', None)
+            if app_settings and hasattr(app_settings, 'get_ui_color'):
+                return app_settings.get_ui_color(key)
+        except Exception:
+            pass
+        pal = self.palette()
+        if key == 'viewport_bg':   return pal.color(pal.ColorRole.Base)
+        if key == 'viewport_text': return pal.color(pal.ColorRole.PlaceholderText)
+        if key == 'border':        return pal.color(pal.ColorRole.Mid)
+        return pal.color(pal.ColorRole.WindowText)
     def refresh(self, rgba: bytes): #vers 2
         self._rgba = bytearray(rgba)
         self._rebuild_pixmap()
@@ -1391,6 +1439,22 @@ _GAME_WORLD_BOUNDS = {
 
 
 class RadarWorkshop(ToolMenuMixin, QWidget): #vers 1
+
+    def _get_ui_color(self, key): #vers 1
+        """Return theme-aware QColor. No hardcoded colors."""
+        from PyQt6.QtGui import QColor
+        try:
+            app_settings = getattr(self, 'app_settings', None) or \
+                getattr(getattr(self, 'main_window', None), 'app_settings', None)
+            if app_settings and hasattr(app_settings, 'get_ui_color'):
+                return app_settings.get_ui_color(key)
+        except Exception:
+            pass
+        pal = self.palette()
+        if key == 'viewport_bg':   return pal.color(pal.ColorRole.Base)
+        if key == 'viewport_text': return pal.color(pal.ColorRole.PlaceholderText)
+        if key == 'border':        return pal.color(pal.ColorRole.Mid)
+        return pal.color(pal.ColorRole.WindowText)
     """Radar Workshop – skeleton class"""
 
     workshop_closed = pyqtSignal()
