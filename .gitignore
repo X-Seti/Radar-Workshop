@@ -11,3 +11,6 @@ venv/
 *.swo
 .DS_Store
 ~/.config/imgfactory/
+apps/themes
+apps/utils
+apps/images
