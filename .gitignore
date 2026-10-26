@@ -14,3 +14,7 @@ venv/
 apps/themes
 apps/utils
 apps/images
+
+# Build output (made by buildscript.py / GitHub Actions; releases hold the downloads)
+/_internal/
+/*.exe
